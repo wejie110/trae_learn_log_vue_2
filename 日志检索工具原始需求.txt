@@ -1,0 +1,23 @@
+2025-03-19 16:42:26.624 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.nsos.AipNsosApplication   | [,,] | No active profile set, falling back to 1 default profile: "default" 
+2025-03-19 16:42:31.658 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.common.config.VersionConfig   | [,,] | wlan0的IP地址为：192.168.103.132 
+2025-03-19 16:42:47.374 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.nsosdata.core.common.utils.NsosIdManager   | [,,] | nsos snowflake initial dataCenterId:4, workId:22 
+2025-03-19 16:42:47.425 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.common.config.InitYaml   | [,,] | [START] Initial Loading... 
+2025-03-19 16:42:47.427 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.common.config.InitYaml   | [,,] | [END] Initial Loading... 
+  呃呃呃
+ 22222
+ ewewe332
+ 
+2025-03-19 16:42:47.427 12342343231234234323
+2025-03-19 16:42:55.834 [aip-nsos,20.20.21.37:9017,main] | INFO  | com.histone.cloud.nsos.AipNsosApplication   | [,,] | Started AipNsosApplication in 37.081 seconds (JVM running for 39.531) 
+
+
+
+假如存在以上日志文件，日志文件可达50Mb6. 文件格式支持 .txt .log 类型。要求通过前端系统实现一个日志文件内容检索输出的功能:
+1. 界面要求有入口可上传日志到系统，有输入框可录入检索字符串，搜索框无字符串时不执行检索，检索动作需手动通过按钮点击触发
+2. 检索到的内容要求输出到界面表格中，表格要求四列。假如输入检索字符串为【Loading...】则表格中应该输出两行数据，分别对应日志中的第四行和第五行。
+3. 表格输出格式：以匹配到的第四第五行为例，第一列为：时间 2025-03-19 16:42:26.624，第二列为：服务[aip-nsos,20.20.21.37:9017,main]，第三列为：类型 INFO ，第四列为：内容  取所有其余剩下的字符串。
+4. 表格输出要求按照第一列时间倒叙排序
+5. 特殊情况：以第五行为例，因为第五行后面的6，7，8行开头有空格，认为6，7，8行的内容都应该被输出到第五行的第四列内容中，且内容中保持换行，但是第10行又开始没有空格出现了则应该停止追加内容到第五行的数据
+7. 表格重点加宽第四列占65%，前三列依次占15% 15%  5%
+8. 适度美化界面，关键代码添加注解便于人工维护
+9. 若文字检索条件中用有 && 字符时，例如输入：Initial&&Loading&&InitYaml，则被检索的日志行需要满足同时含有Initial，Loading，InitYaml字符，并将内容列中这三种字符背景的字符串背景置为黄色
