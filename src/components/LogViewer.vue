@@ -1,14 +1,19 @@
 <template>
   <div class="log-container">
-    <!-- 文件上传组件 -->
+    <!-- 文件上传组件（支持多选/多次添加，检索范围=全部已添加文件） -->
     <el-upload
       class="upload-demo"
       action=""
       :auto-upload="false"
+      :multiple="true"
       :on-change="handleFileUpload"
+      :on-remove="handleFileRemove"
       accept=".log,.txt"
     >
-      <el-button type="primary">选择日志文件</el-button>
+      <el-button type="primary">选择日志文件（可多选）</el-button>
+      <template #tip>
+        <div class="upload-tip">可多次添加或一次多选，检索范围为全部已添加文件；在文件列表中移除某文件即排除其日志</div>
+      </template>
     </el-upload>
 
     <!-- 搜索区域 -->
@@ -62,20 +67,27 @@
       <el-table-column
         prop="service"
         label="服务"
-        width="150"
+        width="100"
+        class-name="service-cell"
+      />
+      <el-table-column
+        prop="file"
+        label="来源文件"
+        width="140"
+        show-overflow-tooltip
       />
       <el-table-column
         prop="level"
         label="类型"
-        width="80"
+        width="60"
       />
       <el-table-column
         prop="content"
         label="内容"
-        min-width="800"
+        min-width="500"
       >
         <template #default="{ row }">
-          <div v-html="highlightText(row.content, searchText)" class="log-content"></div>
+          <CollapsibleLogContent :content="row.content" :search-text="searchText" />
         </template>
       </el-table-column>
     </el-table>
@@ -84,6 +96,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import CollapsibleLogContent from './CollapsibleLogContent.vue';
 
 // 日志解析正则表达式（匹配：时间 [服务] | 级别 | 内容）
 // 使用多行合并机制：当检测到新日志行时创建条目，非匹配行作为内容追加
@@ -94,21 +107,36 @@ const startTime = ref('');
 const endTime = ref('');
 const filteredLogs = ref([]);
 
-// 处理文件上传
+// 处理文件上传（多文件累积：解析结果追加到 rawLogs，不覆盖）
 const handleFileUpload = (file) => {
   const reader = new FileReader();
   reader.onload = (e) => {
-    parseLogFile(e.target.result);
+    parseLogFile(e.target.result, file);
+    // 已有检索条件时自动重搜，保证新文件结果并入；否则等用户点搜索（避免大文件全量渲染）
+    if (searchText.value.trim() || startTime.value || endTime.value) {
+      performSearch();
+    }
   };
   reader.readAsText(file.raw);
 };
 
-// 解析日志文件内容
+// 移除文件时同步剔除其日志并重搜
+const handleFileRemove = (file) => {
+  rawLogs.value = rawLogs.value.filter(entry => entry.uid !== file.uid);
+  if (searchText.value.trim() || startTime.value || endTime.value) {
+    performSearch();
+  } else {
+    filteredLogs.value = [];
+  }
+};
+
 // 解析日志文件（支持多行日志合并）
 // 1. 逐行解析，识别新日志行开始
 // 2. 未匹配行追加到当前条目的content，保留原始格式
-const parseLogFile = (content) => {
-  const lines = content.split('\n');
+// 3. 条目追加到 rawLogs（不覆盖），并标记来源文件名/uid
+const parseLogFile = (content, file) => {
+  // 按 \r?\n 切行，避免 Windows CRLF 行尾的 \r 混入内容
+  const lines = content.split(/\r?\n/);
   const entries = [];
   let currentEntry = null;
 
@@ -121,16 +149,18 @@ const parseLogFile = (content) => {
         timestamp: match[1],
         service: match[2],
         level: match[3],
-        content: match[4] // 捕获组调整后索引变化
+        content: match[4], // 捕获组调整后索引变化
+        file: file.name,
+        uid: file.uid
       };
-    } else if (currentEntry) { 
+    } else if (currentEntry) {
       // 保留原始缩进
       currentEntry.content += '\n' + line;
     }
   });
-  
+
   if (currentEntry) entries.push(currentEntry);
-  rawLogs.value = entries;
+  rawLogs.value = rawLogs.value.concat(entries);
 };
 
 // 执行搜索
@@ -159,35 +189,16 @@ const performSearch = () => {
     })
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 };
-
-// 高亮文本方法
-// 安全的高亮处理方法
-// 1. 先进行HTML转义防止XSS攻击
-// 2. 使用CSS类代替直接样式注入
-// 3. 严格正则转义搜索关键词
-const highlightText = (text, search) => {
-  if (!search.trim()) return text;
-  const keywords = search.split('&&').map(k => k.trim()).filter(k => k);
-  let highlighted = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  keywords.forEach(keyword => {
-    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    highlighted = highlighted.replace(
-      new RegExp(`(${escaped})`, 'gi'),
-      '<span class="highlight">$1</span>'
-    );
-  });
-
-  return highlighted;
-};
 </script>
 
 <style scoped>
 .log-container {
   padding: 20px;
+}
+.upload-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 6px;
 }
 .search-area {
   margin: 20px 0;
@@ -233,6 +244,15 @@ const highlightText = (text, search) => {
 }
 .el-date-editor {
   --el-date-editor-width: 220px;
+}
+/* 收窄单元格左右内边距，让内容列拿到更多宽度 */
+:deep(.el-table .cell) {
+  padding: 0 6px;
+}
+/* 服务列允许折行（逗号/长串任意断行），不截断 */
+:deep(.el-table td.service-cell .cell) {
+  white-space: normal;
+  word-break: break-all;
 }
 ::v-deep .highlight {
   background-color: yellow;
